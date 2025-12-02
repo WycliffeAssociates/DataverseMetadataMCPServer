@@ -1,0 +1,8 @@
+{
+  "inputs": {
+    "DATAVERSE_CONNECTION_STRING": {
+      "description": "Connection string for the Dataverse environment. See https://learn.microsoft.com/power-apps/developer/data-platform/xrm-tooling/use-connection-strings-xrm-tooling-connect for format details.",
+      "required": true
+    }
+  }
+}
