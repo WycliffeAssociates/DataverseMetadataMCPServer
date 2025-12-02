@@ -54,7 +54,7 @@ The server requires a Dataverse connection string to be set as an environment va
 
 ```bash
 # Set the connection string environment variable
-export DATAVERSE_CONNECTION_STRING="AuthType=OAuth;Username=youruser@yourdomain.com;Password=yourpassword;Url=https://yourorg.crm.dynamics.com;AppId=51f81489-12ee-4a9e-aaae-a2591f45987d;RedirectUri=app://58145B91-0C36-4500-8554-080854F2AC97;LoginPrompt=Auto"
+export DATAVERSE_CONNECTION_STRING="AuthType=OAuth;Username=youruser@yourdomain.com;Password=yourpassword;Url=https://yourorg.crm.dynamics.com;AppId=your-app-id-guid;RedirectUri=app://your-redirect-uri-guid;LoginPrompt=Auto"
 ```
 
 **Connection String Components:**
