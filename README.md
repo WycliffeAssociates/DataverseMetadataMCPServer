@@ -7,7 +7,8 @@ An MCP (Model Context Protocol) server that provides tools for querying Microsof
 This MCP server exposes Dataverse metadata through a standardized protocol, enabling AI-powered tools to:
 - List all entities in a Dataverse environment
 - Retrieve detailed metadata for specific entities including attributes, types, and option sets
-- Access lookup relationships and picklist values
+- Access lookup relationships and picklist values, including which picklists use a global option set
+- List the forms on an entity and inspect the fields, web resource libraries, and event handlers configured on a form (useful for matching event handler functions to web resources)
 
 ## Prerequisites
 
@@ -158,6 +159,8 @@ AI: Uses GetListOfEntitiesAsync to retrieve and display the list
 - `DisplayName` - The user-friendly display name
 - `AttributeType` - The data type of the attribute (String, Integer, Lookup, Picklist, etc.)
 - `LookupTargetEntity` - For lookup fields, the target entity/entities
+- `IsGlobalOptionSet` - For picklist/multi-select fields, `true` if the options come from a global (shared) option set, `false` for a local one; null for other field types
+- `GlobalOptionSetName` - The name of the global option set the field uses; null when the option set is local or the field is not a picklist
 - `OptionSetValues` - For picklist/multi-select fields, a dictionary of option values to labels
 
 **Example Usage:**
@@ -174,6 +177,8 @@ AI: Uses GetEntityMetadataAsync with logicalEntityName="account"
     "DisplayName": "Account",
     "AttributeType": "Uniqueidentifier",
     "LookupTargetEntity": null,
+    "IsGlobalOptionSet": null,
+    "GlobalOptionSetName": null,
     "OptionSetValues": null
   },
   {
@@ -181,6 +186,8 @@ AI: Uses GetEntityMetadataAsync with logicalEntityName="account"
     "DisplayName": "Account Name",
     "AttributeType": "String",
     "LookupTargetEntity": null,
+    "IsGlobalOptionSet": null,
+    "GlobalOptionSetName": null,
     "OptionSetValues": null
   },
   {
@@ -188,6 +195,8 @@ AI: Uses GetEntityMetadataAsync with logicalEntityName="account"
     "DisplayName": "Primary Contact",
     "AttributeType": "Lookup",
     "LookupTargetEntity": "contact",
+    "IsGlobalOptionSet": null,
+    "GlobalOptionSetName": null,
     "OptionSetValues": null
   },
   {
@@ -195,12 +204,118 @@ AI: Uses GetEntityMetadataAsync with logicalEntityName="account"
     "DisplayName": "Category",
     "AttributeType": "Picklist",
     "LookupTargetEntity": null,
+    "IsGlobalOptionSet": false,
+    "GlobalOptionSetName": null,
     "OptionSetValues": {
       "1": "Preferred Customer",
       "2": "Standard"
     }
+  },
+  {
+    "LogicalName": "new_region",
+    "DisplayName": "Region",
+    "AttributeType": "Picklist",
+    "LookupTargetEntity": null,
+    "IsGlobalOptionSet": true,
+    "GlobalOptionSetName": "new_region",
+    "OptionSetValues": {
+      "100000000": "North",
+      "100000001": "South"
+    }
   }
 ]
+```
+
+### 3. GetEntityFormsAsync
+
+**Description:** Gets the list of forms defined for an entity (table). Use this to discover which forms exist before retrieving the fields and event handlers on a specific form.
+
+**Parameters:**
+- `logicalEntityName` (string, required) - The logical name of the entity (table), e.g. `account`
+
+**Returns:** A list of `FormInfo` objects containing:
+- `FormId` - The GUID of the form (pass this to `GetFormDetailsAsync`)
+- `Name` - The form name
+- `EntityLogicalName` - The entity the form belongs to
+- `FormType` - The form type (Main, QuickCreate, QuickViewForm, Card, etc.)
+- `IsManaged` - Whether the form comes from a managed solution
+
+**Example Usage:**
+```
+User: "What forms does the account table have?"
+AI: Uses GetEntityFormsAsync with logicalEntityName="account"
+```
+
+**Sample Output:**
+```json
+[
+  {
+    "FormId": "00000000-0000-0000-0000-000000000001",
+    "Name": "Account",
+    "EntityLogicalName": "account",
+    "FormType": "Main",
+    "IsManaged": true
+  }
+]
+```
+
+### 4. GetFormDetailsAsync
+
+**Description:** Gets the fields, web resource libraries, and event handlers configured on a single form by parsing its form XML. Event handlers reference the web resource library (`LibraryName`) and function (`FunctionName`) they call, and fields list the columns actually placed on the form. Use this to match the fields on a form and the JavaScript functions wired to events against the web resources that should contain them.
+
+**Parameters:**
+- `formId` (string, required) - The form GUID returned by `GetEntityFormsAsync`
+
+**Returns:** A `FormDetails` object containing:
+- `FormId`, `Name`, `EntityLogicalName`, `FormType` - Form identity
+- `FormLibraries` - The web resource (JavaScript) libraries the form loads
+- `Fields` - The columns bound to controls placed on the form, each with `DataFieldName`, `ControlId`, and `ControlClassId`
+- `EventHandlers` - The functions wired to form and column events, each with:
+  - `EventName` - The event (e.g. `onload`, `onsave`, `onchange`)
+  - `Attribute` - For column events (e.g. `onchange`), the column the event fires on; null for form-level events
+  - `FunctionName` - The function called, e.g. `MyNamespace.onLoad`
+  - `LibraryName` - The web resource the function is expected to live in, e.g. `new_myscript.js`
+  - `Enabled`, `PassExecutionContext`, `Parameters`
+
+**Example Usage:**
+```
+User: "What fields and event handlers are on the main account form?"
+AI: Uses GetEntityFormsAsync to find the form id, then GetFormDetailsAsync with that formId
+```
+
+**Sample Output:**
+```json
+{
+  "FormId": "00000000-0000-0000-0000-000000000001",
+  "Name": "Account",
+  "EntityLogicalName": "account",
+  "FormType": "Main",
+  "FormLibraries": ["new_account.js"],
+  "Fields": [
+    { "DataFieldName": "name", "ControlId": "name", "ControlClassId": "{...}" },
+    { "DataFieldName": "primarycontactid", "ControlId": "primarycontactid", "ControlClassId": "{...}" }
+  ],
+  "EventHandlers": [
+    {
+      "EventName": "onload",
+      "Attribute": null,
+      "FunctionName": "Account.Form.onLoad",
+      "LibraryName": "new_account.js",
+      "Enabled": true,
+      "PassExecutionContext": true,
+      "Parameters": ""
+    },
+    {
+      "EventName": "onchange",
+      "Attribute": "primarycontactid",
+      "FunctionName": "Account.Form.onPrimaryContactChange",
+      "LibraryName": "new_account.js",
+      "Enabled": true,
+      "PassExecutionContext": true,
+      "Parameters": ""
+    }
+  ]
+}
 ```
 
 ## Publishing to NuGet.org
